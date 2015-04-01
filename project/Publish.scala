@@ -20,21 +20,34 @@ import sbtrelease.ReleasePlugin._
 
 object Publish extends Build {
 
-  lazy val creds = (for {
-    publish <- Option(Path.userHome / ".ivy2" / ".credentials")
-    if publish.exists
-  } yield Seq(credentials += Credentials(publish))).getOrElse(Seq.empty)
+  val altReleaseDeploymentRepository = sys.props.get("altReleaseDeploymentRepository")
+  val altSnapshotDeploymentRepository = sys.props.get("altSnapshotDeploymentRepository")
+
+  val nexus = "https://oss.sonatype.org"
+  val defaultReleaseDeploymentRepository = nexus + "/service/local/staging/deploy/maven2"
+  val defaultSnapshotDeploymentRepository = nexus + "/content/repositories/snapshots"
+
+  val releasesDeploymentRepository =
+    "releases" at (altReleaseDeploymentRepository getOrElse defaultReleaseDeploymentRepository)
+  val snapshotsDeploymentRepository =
+    "snapshots" at (altSnapshotDeploymentRepository getOrElse defaultSnapshotDeploymentRepository)
+
+  val altCredentialsLocation = sys.props.get("altCredentialsLocation").map(new File(_))
+  val defaultCredentialsLocation = Path.userHome / ".ivy2" / ".credentials"
+  val credentialsLocation = altCredentialsLocation getOrElse defaultCredentialsLocation
+
+  lazy val creds = if (credentialsLocation.isFile)
+    Seq(credentials += Credentials(credentialsLocation)) else Seq.empty
 
   override lazy val settings = creds ++ Seq(
     organizationName := "DataStax",
     organizationHomepage := Some(url("http://www.datastax.com/")),
 
     publishTo <<= version { v: String =>
-      val nexus = "https://oss.sonatype.org/"
       if (v.trim.endsWith("SNAPSHOT"))
-        Some("snapshots" at nexus + "content/repositories/snapshots")
+        Some(snapshotsDeploymentRepository)
       else
-        Some("releases" at nexus + "service/local/staging/deploy/maven2")
+        Some(releasesDeploymentRepository)
     },
     publishMavenStyle := true,
     publishArtifact in Test := false,
